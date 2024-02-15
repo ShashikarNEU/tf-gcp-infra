@@ -43,11 +43,6 @@ variable "db_subnet_name" {
   type        = string
 }
 
-variable "number_of_vpc" {
-  description = "Number of vpcs"
-  type        = number
-}
-
 variable "tf_route_name" {
   description = "route name"
   type        = string
