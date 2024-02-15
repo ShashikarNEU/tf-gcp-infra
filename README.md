@@ -1,14 +1,33 @@
-### Setting up Infrastructure on Google Cloud Platform using Terraform
+# Setting up Infrastructure on Google Cloud Platform using Terraform
 
 This repository contains Terraform configurations to set up networking resources such as Virtual Private Cloud (VPC), subnets, routes, etc., on Google Cloud Platform (GCP).
 
-#### Requirements
+## Requirements
 
 - [gcloud CLI](https://cloud.google.com/sdk/gcloud) installed and configured on your development machine.
 - [Terraform](https://www.terraform.io/downloads.html) installed on your machine.
-- Enable required GCP services/APIs in your project. (Google Compute Engine API is enabled)
+- Enable required GCP services/APIs in your project.
 
-#### Getting Started
+## Enabled GCP APIs
+
+- Compute Engine API
+- BigQuery API
+- BigQuery Migration API
+- BigQuery Storage API
+- Cloud Datastore API
+- Cloud Logging API
+- Cloud Monitoring API
+- Cloud OS Login API
+- Cloud SQL
+- Cloud Storage
+- Cloud Storage API
+- Cloud Trace API
+- Google Cloud APIs
+- Google Cloud Storage JSON API
+- Service Management API
+- Service Usage API
+
+## Getting Started
 
 1. **Clone Repository**: Clone this repository to your local machine.
 
@@ -34,7 +53,7 @@ This repository contains Terraform configurations to set up networking resources
     terraform init
     ```
 
-#### Infrastructure Setup
+## Infrastructure Setup
 
 1. **Create VPC and Subnets**: Terraform will create a Virtual Private Cloud (VPC) with two subnets: `webapp` and `db`.
 
@@ -42,7 +61,7 @@ This repository contains Terraform configurations to set up networking resources
 
 3. **No Hardcoded Values**: Ensure that no values are hardcoded in the Terraform configuration files.
 
-#### Usage
+## Usage
 
 1. **Plan Infrastructure**: View the execution plan to understand what Terraform will do.
 
