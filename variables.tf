@@ -47,3 +47,64 @@ variable "tf_route_name" {
   description = "route name"
   type        = string
 }
+
+variable "routing_mode" {
+  description = "routing mode"
+  type        = string
+}
+
+variable "email" {
+  type = string
+}
+
+variable "scopes" {
+  type = list(string)
+}
+
+variable "interface" {
+  type = string
+}
+
+variable "image" {
+  type = string
+}
+
+variable "type" {
+  type = string
+}
+
+variable "size" {
+  type = number
+}
+
+variable "name" {
+  type = string
+}
+
+variable "machine_type" {
+  type = string
+}
+
+variable "ports" {
+  type = list(string)
+}
+
+variable "source_tags" {
+  type = list(string)
+}
+
+variable "source_ranges" {
+  type = list(string)
+}
+
+variable "firewall_allow_name" {
+  type = string
+}
+
+variable "firewall_deny_name" {
+  type = string
+}
+
+variable "target_tags" {
+  type = list(string)
+}
