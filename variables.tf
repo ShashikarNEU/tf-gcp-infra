@@ -108,3 +108,15 @@ variable "firewall_deny_name" {
 variable "target_tags" {
   type = list(string)
 }
+
+variable "database_version" {
+  type = string
+}
+
+variable "sql_tier" {
+  type = string
+}
+
+variable "sql_disk_type" {
+  type = string
+}

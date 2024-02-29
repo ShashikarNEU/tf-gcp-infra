@@ -19,10 +19,11 @@ resource "google_compute_subnetwork" "webapp_subnet" {
 }
 
 resource "google_compute_subnetwork" "db_subnet" {
-  name          = var.db_subnet_name
-  region        = var.region
-  network       = google_compute_network.vpc_network.self_link
-  ip_cidr_range = var.db_subnet_cidr
+  name                     = var.db_subnet_name
+  region                   = var.region
+  network                  = google_compute_network.vpc_network.self_link
+  ip_cidr_range            = var.db_subnet_cidr
+  private_ip_google_access = true
 }
 
 resource "google_compute_route" "webapp_route" {
@@ -31,6 +32,71 @@ resource "google_compute_route" "webapp_route" {
   dest_range       = var.dest_range_route
   next_hop_gateway = "default-internet-gateway"
   priority         = 1000
+}
+
+resource "google_compute_global_address" "private_ip_address" {
+  name          = "private-ip-address"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  purpose       = "VPC_PEERING"
+  network       = google_compute_network.vpc_network.self_link
+}
+
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.vpc_network.self_link
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_address.name]
+}
+
+resource "random_id" "db_name_suffix" {
+  byte_length = 4
+}
+
+resource "google_sql_database_instance" "mysql_instance" {
+  name                = "mysql-instance-${random_id.db_name_suffix.hex}"
+  database_version    = var.database_version
+  region              = var.region
+  deletion_protection = false
+  depends_on          = [google_service_networking_connection.private_vpc_connection]
+
+  settings {
+    tier              = var.sql_tier
+    availability_type = var.routing_mode
+    disk_type         = var.sql_disk_type
+    disk_size         = var.size
+
+    backup_configuration {
+      enabled            = true
+      binary_log_enabled = true
+    }
+
+    ip_configuration {
+      ipv4_enabled                                  = false
+      private_network                               = google_compute_network.vpc_network.self_link
+      enable_private_path_for_google_cloud_services = true
+    }
+  }
+}
+
+resource "google_sql_database" "mysql" {
+  name     = var.webapp_subnet_name
+  instance = google_sql_database_instance.mysql_instance.name
+}
+
+resource "random_password" "password" {
+  length           = 12
+  special          = true
+  min_lower        = 2
+  min_upper        = 2
+  min_numeric      = 2
+  min_special      = 2
+  override_special = "~!@#$%^&*()_-+={}[]/<>,.;?':|"
+}
+
+resource "google_sql_user" "users" {
+  name     = var.webapp_subnet_name
+  instance = google_sql_database_instance.mysql_instance.name
+  password = random_password.password.result
 }
 
 resource "google_compute_firewall" "firewall_allow" {
@@ -97,8 +163,18 @@ resource "google_compute_instance" "vm-instance" {
     }
   }
 
+  metadata_startup_script = <<-EOF
+    echo "DATABASE_URL=jdbc:mysql://${google_sql_database_instance.mysql_instance.private_ip_address}:3306/cloudDatabase?createDatabaseIfNotExist=true" > .env
+    echo "DATABASE_USERNAME=${var.webapp_subnet_name}" >> .env
+    echo "DATABASE_PASSWORD=${random_password.password.result}" >> .env
+    sudo mv .env /opt/
+    sudo chown csye6225:csye6225 /opt/.env
+    sudo setenforce 0
+    sudo systemctl daemon-reload
+    sudo systemctl restart csye6225.service
+  EOF
+
   service_account {
-    # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
     email  = var.email
     scopes = var.scopes
   }
