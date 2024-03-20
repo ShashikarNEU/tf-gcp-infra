@@ -120,3 +120,15 @@ variable "sql_tier" {
 variable "sql_disk_type" {
   type = string
 }
+
+variable "domain_name" {
+  type = string
+}
+
+variable "ttl" {
+  type = number
+}
+
+variable "dns_type" {
+  type = string
+}

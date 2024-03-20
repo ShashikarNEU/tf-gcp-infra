@@ -132,6 +132,11 @@ resource "google_compute_firewall" "firewall_deny" {
   source_ranges = var.source_ranges
 }
 
+resource "google_service_account" "custom-service-account" {
+  account_id   = "custom-service-account"
+  display_name = "csa"
+}
+
 resource "google_compute_instance" "vm-instance" {
   name         = var.name
   machine_type = var.machine_type
@@ -175,7 +180,36 @@ resource "google_compute_instance" "vm-instance" {
   EOF
 
   service_account {
-    email  = var.email
+    email  = "${google_service_account.custom-service-account.account_id}@${var.project_id}.iam.gserviceaccount.com"
     scopes = var.scopes
   }
+}
+
+# fetching already created DNS zone
+data "google_dns_managed_zone" "env_dns_zone" {
+  name = var.domain_name
+}
+
+# to register web-server's ip address in DNS
+resource "google_dns_record_set" "default" {
+  name         = data.google_dns_managed_zone.env_dns_zone.dns_name
+  managed_zone = data.google_dns_managed_zone.env_dns_zone.name
+  type         = var.dns_type
+  ttl          = var.ttl
+  rrdatas = [
+    google_compute_instance.vm-instance.network_interface[0].access_config[0].nat_ip
+  ]
+}
+
+resource "google_project_iam_binding" "project" {
+  project = var.project_id
+  for_each = toset([
+    "roles/logging.admin",
+    "roles/monitoring.metricWriter"
+  ])
+  role = each.key
+
+  members = [
+    "serviceAccount:${google_service_account.custom-service-account.account_id}@${var.project_id}.iam.gserviceaccount.com"
+  ]
 }
