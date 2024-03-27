@@ -132,3 +132,7 @@ variable "ttl" {
 variable "dns_type" {
   type = string
 }
+
+variable "db_name" {
+  type = string
+}
