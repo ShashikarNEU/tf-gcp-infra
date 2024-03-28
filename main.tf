@@ -180,7 +180,7 @@ resource "google_compute_instance" "vm-instance" {
   EOF
 
   service_account {
-    email  = "${google_service_account.custom-service-account.account_id}@${var.project_id}.iam.gserviceaccount.com"
+    email  = var.email
     scopes = var.scopes
   }
 }
@@ -211,13 +211,13 @@ resource "google_project_iam_binding" "project" {
   role = each.key
 
   members = [
-    "serviceAccount:${google_service_account.custom-service-account.account_id}@${var.project_id}.iam.gserviceaccount.com"
+    "serviceAccount:${var.email}", "serviceAccount:${var.email_workflow}"
   ]
 }
 
 resource "google_pubsub_topic" "verify_email" {
-  name                       = "verify-email"
-  message_retention_duration = "604800s"
+  name                       = var.pubsub_topic_name
+  message_retention_duration = var.pubsub_topic_message_retention_duration
 }
 
 resource "google_pubsub_subscription" "verify_email_subscription" {
@@ -231,31 +231,31 @@ resource "random_id" "bucket_prefix" {
 
 resource "google_storage_bucket" "bucket" {
   name                        = "${random_id.bucket_prefix.hex}-gcf-source" # Every bucket name must be globally unique
-  location                    = "US"
+  location                    = var.bucket_location
   uniform_bucket_level_access = true
 }
 
 resource "google_storage_bucket_object" "default" {
-  name   = "functions-source.zip"
+  name   = var.bucket_name
   bucket = google_storage_bucket.bucket.name
-  source = "C:/CSYE 6225/serverless/function-source/functions_source.zip" # Path to the zipped function source code
+  source = var.bucket_source # Path to the zipped function source code
 }
 
 resource "google_vpc_access_connector" "connector" {
-  name          = "vpc-access-con"
-  ip_cidr_range = "10.8.0.0/28"
+  name          = var.google_vpc_access_connector_name
+  ip_cidr_range = var.vpc_ip_cidr_range
   region        = var.region
   network       = google_compute_network.vpc_network.self_link
 }
 
 resource "google_cloudfunctions2_function" "function" {
-  name        = "cloud-function"
+  name        = var.cloud_function_name
   location    = var.region
   description = "a new function"
 
   build_config {
-    runtime     = "java17"
-    entry_point = "gcfv2pubsub.PubSubFunction" # Set the entry point
+    runtime     = var.runtime
+    entry_point = var.entry_point # Set the entry point
 
     source {
       storage_source {
@@ -266,10 +266,9 @@ resource "google_cloudfunctions2_function" "function" {
   }
 
   service_config {
-    service_account_email         = "${google_service_account.custom-service-account.account_id}@${var.project_id}.iam.gserviceaccount.com"
+    service_account_email         = var.email
     vpc_connector                 = google_vpc_access_connector.connector.id
-    vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
-
+    vpc_connector_egress_settings = var.vpc_connector_egress_settings
     environment_variables = {
       DB_IP_ADDRESS = google_sql_database_instance.mysql_instance.private_ip_address
       DB_NAME       = var.db_name
@@ -280,8 +279,8 @@ resource "google_cloudfunctions2_function" "function" {
 
   event_trigger {
     trigger_region = var.region
-    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+    event_type     = var.event_type
     pubsub_topic   = google_pubsub_topic.verify_email.id
-    retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
+    retry_policy   = var.retry_policy
   }
 }

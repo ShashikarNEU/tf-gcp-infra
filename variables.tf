@@ -136,3 +136,58 @@ variable "dns_type" {
 variable "db_name" {
   type = string
 }
+
+variable "retry_policy" {
+  type = string
+}
+
+variable "event_type" {
+  type = string
+}
+
+variable "vpc_connector_egress_settings" {
+  type = string
+}
+
+variable "entry_point" {
+  type = string
+}
+
+variable "runtime" {
+  type = string
+}
+variable "vpc_ip_cidr_range" {
+  type = string
+}
+
+variable "bucket_name" {
+  type = string
+}
+
+variable "bucket_source" {
+  type = string
+}
+
+variable "bucket_location" {
+  type = string
+}
+
+variable "pubsub_topic_name" {
+  type = string
+}
+
+variable "pubsub_topic_message_retention_duration" {
+  type = string
+}
+
+variable "google_vpc_access_connector_name" {
+  type = string
+}
+
+variable "cloud_function_name" {
+  type = string
+}
+
+variable "email_workflow" {
+  type = string
+}
