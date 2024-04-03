@@ -137,25 +137,65 @@ resource "google_service_account" "custom-service-account" {
   display_name = "csa"
 }
 
-resource "google_compute_instance" "vm-instance" {
-  name         = var.name
-  machine_type = var.machine_type
-  zone         = var.zone
+# resource "google_compute_instance" "vm-instance" {
+#   name         = var.name
+#   machine_type = var.machine_type
+#   zone         = var.zone
 
+#   tags = ["vm-instance"]
+
+#   boot_disk {
+#     device_name = "instance-1"
+#     initialize_params {
+#       image = var.image
+#       size  = var.size
+#       type  = var.type
+#     }
+#   }
+
+#   // Local SSD disk
+#   scratch_disk {
+#     interface = var.interface
+#   }
+
+#   network_interface {
+#     network = google_compute_network.vpc_network.self_link
+
+#     subnetwork = google_compute_subnetwork.webapp_subnet.self_link
+
+#     access_config {
+#       // Ephemeral public IP
+#     }
+#   }
+
+#   metadata_startup_script = <<-EOF
+#     echo "DATABASE_URL=jdbc:mysql://${google_sql_database_instance.mysql_instance.private_ip_address}:3306/${var.db_name}?createDatabaseIfNotExist=true" > .env
+#     echo "DATABASE_USERNAME=${var.webapp_subnet_name}" >> .env
+#     echo "DATABASE_PASSWORD=${random_password.password.result}" >> .env
+#     sudo mv .env /opt/
+#     sudo chown csye6225:csye6225 /opt/.env
+#     sudo setenforce 0
+#     sudo systemctl daemon-reload
+#     sudo systemctl restart csye6225.service
+#   EOF
+
+#   service_account {
+#     email  = var.email
+#     scopes = var.scopes
+#   }
+# }
+
+resource "google_compute_region_instance_template" "instance_template" {
+  name_prefix  = "instance-template-"
+  machine_type = var.machine_type
+  region       = var.region
   tags = ["vm-instance"]
 
-  boot_disk {
-    device_name = "instance-1"
-    initialize_params {
-      image = var.image
-      size  = var.size
-      type  = var.type
-    }
-  }
-
-  // Local SSD disk
-  scratch_disk {
-    interface = var.interface
+  // boot disk
+  disk {
+    source_image = var.image
+    disk_type = var.type
+    disk_size_gb = var.size
   }
 
   network_interface {
@@ -185,21 +225,73 @@ resource "google_compute_instance" "vm-instance" {
   }
 }
 
+resource "google_compute_health_check" "http2-health-check" {
+  name        = "http2-health-check"
+  description = "Health check via http2"
+
+  timeout_sec         = 1
+  check_interval_sec  = 1
+  healthy_threshold   = 4
+  unhealthy_threshold = 5
+
+  http_health_check {
+    port               = "8080"
+    request_path       = "/healthz"
+  }
+}
+
+resource "google_compute_region_instance_group_manager" "grp_manager" {
+  name = "appserver-igm"
+
+  base_instance_name         = "app"
+  region                     = var.region
+
+  version {
+    instance_template = google_compute_region_instance_template.instance_template.id
+  }
+
+  named_port {
+    name = "custom"
+    port = 8080
+  }
+
+  auto_healing_policies {
+    health_check      = google_compute_health_check.http2-health-check.id
+    initial_delay_sec = 300
+  }
+}
+
+resource "google_compute_region_autoscaler" "autoscaler" {
+  name   = "my-region-autoscaler"
+  region = var.region
+  target = google_compute_region_instance_group_manager.grp_manager.id
+
+  autoscaling_policy {
+    max_replicas    = 5
+    min_replicas    = 1
+    cooldown_period = 60
+
+    cpu_utilization {
+      target = 0.01
+    }
+  }
+}
+
 # fetching already created DNS zone
 data "google_dns_managed_zone" "env_dns_zone" {
   name = var.domain_name
 }
 
 # to register web-server's ip address in DNS
-resource "google_dns_record_set" "default" {
-  name         = data.google_dns_managed_zone.env_dns_zone.dns_name
-  managed_zone = data.google_dns_managed_zone.env_dns_zone.name
-  type         = var.dns_type
-  ttl          = var.ttl
-  rrdatas = [
-    google_compute_instance.vm-instance.network_interface[0].access_config[0].nat_ip
-  ]
-}
+# resource "google_dns_record_set" "default" {
+#   name         = data.google_dns_managed_zone.env_dns_zone.dns_name
+#   managed_zone = data.google_dns_managed_zone.env_dns_zone.name
+#   type         = var.dns_type
+#   ttl          = var.ttl
+#   rrdatas = [
+#     google_compute_instance.vm-instance.network_interface[0].access_config[0].nat_ip
+#   ]
+# }
 
 resource "google_project_iam_binding" "project" {
   project = var.project_id
