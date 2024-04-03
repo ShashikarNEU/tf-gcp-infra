@@ -191,3 +191,79 @@ variable "cloud_function_name" {
 variable "email_workflow" {
   type = string
 }
+
+variable "timeout_sec" {
+  type = number
+}
+
+variable "check_interval_sec" {
+  type = number
+}
+
+variable "healthy_threshold" {
+  type = number
+}
+
+variable "unhealthy_threshold" {
+  type = number
+}
+
+variable "port" {
+  type = string
+}
+
+variable "request_path" {
+  type = string
+}
+
+variable "named_port" {
+  type = number
+}
+
+variable "initial_delay_sec" {
+  type = number
+}
+
+variable "max_replicas" {
+  type = number
+}
+
+variable "min_replicas" {
+  type = number
+}
+
+variable "cooldown_period" {
+  type = number
+}
+
+variable "cpu_utilization_target" {
+  type = number
+}
+
+variable "load_balancing_scheme" {
+  type = string
+}
+
+variable "port_range" {
+  type = string
+}
+
+variable "protocol" {
+  type = string
+}
+
+variable "full_domain_name" {
+  type = string
+}
+
+variable "balancing_mode" {
+  type = string
+}
+
+variable "capacity_scaler" {
+  type = number
+}
+
+variable "timeout_sec_backend_service" {
+  type = number
+}

@@ -196,6 +196,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     source_image = var.image
     disk_type    = var.type
     disk_size_gb = var.size
+    auto_delete = true
   }
 
   network_interface {
@@ -204,7 +205,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     subnetwork = google_compute_subnetwork.webapp_subnet.self_link
 
     access_config {
-      // Ephemeral public IP
+      
     }
   }
 
@@ -229,14 +230,14 @@ resource "google_compute_health_check" "http2-health-check" {
   name        = "http2-health-check"
   description = "Health check via http2"
 
-  timeout_sec         = 1
-  check_interval_sec  = 1
-  healthy_threshold   = 4
-  unhealthy_threshold = 5
+  timeout_sec         = var.timeout_sec
+  check_interval_sec  = var.check_interval_sec
+  healthy_threshold   = var.healthy_threshold
+  unhealthy_threshold = var.unhealthy_threshold
 
   http_health_check {
-    port         = "8080"
-    request_path = "/healthz"
+    port         = var.port
+    request_path = var.request_path
   }
 }
 
@@ -251,13 +252,13 @@ resource "google_compute_region_instance_group_manager" "grp_manager" {
   }
 
   named_port {
-    name = "custom"
-    port = 8080
+    name = var.webapp_subnet_name
+    port = var.named_port
   }
 
   auto_healing_policies {
     health_check      = google_compute_health_check.http2-health-check.id
-    initial_delay_sec = 300
+    initial_delay_sec = var.initial_delay_sec
   }
 }
 
@@ -267,31 +268,89 @@ resource "google_compute_region_autoscaler" "autoscaler" {
   target = google_compute_region_instance_group_manager.grp_manager.id
 
   autoscaling_policy {
-    max_replicas    = 5
-    min_replicas    = 1
-    cooldown_period = 60
+    max_replicas    = var.max_replicas
+    min_replicas    = var.min_replicas
+    cooldown_period = var.cooldown_period
 
     cpu_utilization {
-      target = 0.01
+      target = var.cpu_utilization_target
     }
   }
 }
+
+# forwarding rule
+resource "google_compute_global_forwarding_rule" "default" {
+  name                  = "l7-xlb-forwarding-rule"
+  load_balancing_scheme = var.load_balancing_scheme
+  port_range            = var.port_range
+  target                = google_compute_target_https_proxy.default.id
+}
+
+# http proxy
+resource "google_compute_target_https_proxy" "default" {
+  name     = "l7-xlb-target-https-proxy"
+  url_map  = google_compute_url_map.default.id
+  ssl_certificates = [
+    google_compute_managed_ssl_certificate.lb_default.name
+  ]
+  depends_on = [
+    google_compute_managed_ssl_certificate.lb_default
+  ]
+}
+
+# url map
+resource "google_compute_url_map" "default" {
+  name            = "l7-xlb-url-map"
+  default_service = google_compute_backend_service.default.id
+}
+
+# backend service with custom request and response headers
+resource "google_compute_backend_service" "default" {
+  name                    = "l7-xlb-backend-service"
+  protocol                = var.protocol
+  port_name               = var.webapp_subnet_name
+  load_balancing_scheme   = var.load_balancing_scheme
+  timeout_sec             = var.timeout_sec_backend_service
+  health_checks           = [google_compute_health_check.http2-health-check.id]
+  backend {
+    group           = google_compute_region_instance_group_manager.grp_manager.instance_group
+    balancing_mode  = var.balancing_mode
+    capacity_scaler = var.capacity_scaler
+  }
+  log_config{
+    enable = true
+  }
+}
+
+resource "google_compute_managed_ssl_certificate" "lb_default" {
+  name     = "myservice-ssl-cert"
+
+  managed {
+    domains = [var.full_domain_name]
+  }
+}
+
+# resource "google_compute_ssl_certificate" "namecheap_ssl_certif" {
+#   name        = "namecheap-ssl-cert"
+#   private_key = file("C:/CSYE 6225/tf-gcp-infra/sever.key")
+#   certificate = file("C:/CSYE 6225/tf-gcp-infra/csye6225-cloud-project_me.crt")
+# }
 
 # fetching already created DNS zone
 data "google_dns_managed_zone" "env_dns_zone" {
   name = var.domain_name
 }
 
-# to register web-server's ip address in DNS
-# resource "google_dns_record_set" "default" {
-#   name         = data.google_dns_managed_zone.env_dns_zone.dns_name
-#   managed_zone = data.google_dns_managed_zone.env_dns_zone.name
-#   type         = var.dns_type
-#   ttl          = var.ttl
-#   rrdatas = [
-#     google_compute_instance.vm-instance.network_interface[0].access_config[0].nat_ip
-#   ]
-# }
+#to register web-server's ip address in DNS
+resource "google_dns_record_set" "default" {
+  name         = data.google_dns_managed_zone.env_dns_zone.dns_name
+  managed_zone = data.google_dns_managed_zone.env_dns_zone.name
+  type         = var.dns_type
+  ttl          = var.ttl
+  rrdatas = [
+    google_compute_global_forwarding_rule.default.ip_address
+  ]
+}
 
 resource "google_project_iam_binding" "project" {
   project = var.project_id
