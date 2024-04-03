@@ -196,7 +196,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     source_image = var.image
     disk_type    = var.type
     disk_size_gb = var.size
-    auto_delete = true
+    auto_delete  = true
   }
 
   network_interface {
@@ -205,7 +205,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     subnetwork = google_compute_subnetwork.webapp_subnet.self_link
 
     access_config {
-      
+
     }
   }
 
@@ -288,8 +288,8 @@ resource "google_compute_global_forwarding_rule" "default" {
 
 # http proxy
 resource "google_compute_target_https_proxy" "default" {
-  name     = "l7-xlb-target-https-proxy"
-  url_map  = google_compute_url_map.default.id
+  name    = "l7-xlb-target-https-proxy"
+  url_map = google_compute_url_map.default.id
   ssl_certificates = [
     google_compute_managed_ssl_certificate.lb_default.name
   ]
@@ -306,24 +306,24 @@ resource "google_compute_url_map" "default" {
 
 # backend service with custom request and response headers
 resource "google_compute_backend_service" "default" {
-  name                    = "l7-xlb-backend-service"
-  protocol                = var.protocol
-  port_name               = var.webapp_subnet_name
-  load_balancing_scheme   = var.load_balancing_scheme
-  timeout_sec             = var.timeout_sec_backend_service
-  health_checks           = [google_compute_health_check.http2-health-check.id]
+  name                  = "l7-xlb-backend-service"
+  protocol              = var.protocol
+  port_name             = var.webapp_subnet_name
+  load_balancing_scheme = var.load_balancing_scheme
+  timeout_sec           = var.timeout_sec_backend_service
+  health_checks         = [google_compute_health_check.http2-health-check.id]
   backend {
     group           = google_compute_region_instance_group_manager.grp_manager.instance_group
     balancing_mode  = var.balancing_mode
     capacity_scaler = var.capacity_scaler
   }
-  log_config{
+  log_config {
     enable = true
   }
 }
 
 resource "google_compute_managed_ssl_certificate" "lb_default" {
-  name     = "myservice-ssl-cert"
+  name = "myservice-ssl-cert"
 
   managed {
     domains = [var.full_domain_name]
