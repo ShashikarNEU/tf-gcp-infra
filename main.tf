@@ -189,12 +189,12 @@ resource "google_compute_region_instance_template" "instance_template" {
   name_prefix  = "instance-template-"
   machine_type = var.machine_type
   region       = var.region
-  tags = ["vm-instance"]
+  tags         = ["vm-instance"]
 
   // boot disk
   disk {
     source_image = var.image
-    disk_type = var.type
+    disk_type    = var.type
     disk_size_gb = var.size
   }
 
@@ -235,16 +235,16 @@ resource "google_compute_health_check" "http2-health-check" {
   unhealthy_threshold = 5
 
   http_health_check {
-    port               = "8080"
-    request_path       = "/healthz"
+    port         = "8080"
+    request_path = "/healthz"
   }
 }
 
 resource "google_compute_region_instance_group_manager" "grp_manager" {
   name = "appserver-igm"
 
-  base_instance_name         = "app"
-  region                     = var.region
+  base_instance_name = "app"
+  region             = var.region
 
   version {
     instance_template = google_compute_region_instance_template.instance_template.id
