@@ -114,27 +114,25 @@ resource "google_compute_firewall" "firewall_allow" {
 
   priority      = 800
   source_tags   = var.source_tags
-  source_ranges = var.source_ranges
-}
-
-resource "google_compute_firewall" "firewall_deny" {
-  name    = var.firewall_deny_name
-  network = google_compute_network.vpc_network.self_link
-
-
-  deny {
-    protocol = "all"
-    ports    = []
-  }
-
-  source_tags   = var.source_tags
-  target_tags   = var.target_tags
-  source_ranges = var.source_ranges
+  target_tags   = var.target_tags 
+  source_ranges = [google_compute_global_forwarding_rule.default.ip_address]
 }
 
 resource "google_service_account" "custom-service-account" {
   account_id   = "custom-service-account"
   display_name = "csa"
+}
+
+resource "google_compute_firewall" "default" {
+  name = "fw-allow-health-check"
+  allow {
+    protocol = "tcp"
+  }
+  direction     = "INGRESS"
+  network       = google_compute_network.vpc_network.self_link
+  priority      = 1000
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
+  target_tags   = var.target_tags
 }
 
 # resource "google_compute_instance" "vm-instance" {
@@ -189,7 +187,6 @@ resource "google_compute_region_instance_template" "instance_template" {
   name_prefix  = "instance-template-"
   machine_type = var.machine_type
   region       = var.region
-  tags         = ["vm-instance"]
 
   // boot disk
   disk {
@@ -224,6 +221,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     email  = var.email
     scopes = var.scopes
   }
+  tags         = var.target_tags
 }
 
 resource "google_compute_health_check" "http2-health-check" {
