@@ -267,3 +267,7 @@ variable "capacity_scaler" {
 variable "timeout_sec_backend_service" {
   type = number
 }
+
+variable "email_ce_service_agent" {
+  type = string
+}

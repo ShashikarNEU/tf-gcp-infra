@@ -52,12 +52,51 @@ resource "random_id" "db_name_suffix" {
   byte_length = 4
 }
 
+resource "google_kms_key_ring" "keyring" {
+  name     = "keyring-name"
+  location = var.region
+}
+
+resource "google_kms_crypto_key" "key" {
+  name     = "crypto-key-name"
+  key_ring = google_kms_key_ring.keyring.id
+  purpose  = "ENCRYPT_DECRYPT"
+
+  rotation_period = "2592000s"
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+data "google_storage_project_service_account" "gcs_account" {
+}
+
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  provider = google-beta
+  service  = "sqladmin.googleapis.com"
+  project  = var.project_id
+}
+
+resource "google_kms_crypto_key_iam_binding" "crypto_key" {
+  crypto_key_id = google_kms_crypto_key.key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+  members = [
+    "serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}",
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+    "serviceAccount:${var.email_ce_service_agent}"
+  ]
+}
+
 resource "google_sql_database_instance" "mysql_instance" {
   name                = "mysql-instance-${random_id.db_name_suffix.hex}"
   database_version    = var.database_version
   region              = var.region
   deletion_protection = false
-  depends_on          = [google_service_networking_connection.private_vpc_connection]
+  encryption_key_name = google_kms_crypto_key.key.id
+  depends_on          = [google_service_networking_connection.private_vpc_connection, google_kms_crypto_key_iam_binding.crypto_key]
+
 
   settings {
     tier              = var.sql_tier
@@ -114,7 +153,7 @@ resource "google_compute_firewall" "firewall_allow" {
 
   priority      = 800
   source_tags   = var.source_tags
-  target_tags   = var.target_tags 
+  target_tags   = var.target_tags
   source_ranges = [google_compute_global_forwarding_rule.default.ip_address]
 }
 
@@ -135,54 +174,6 @@ resource "google_compute_firewall" "default" {
   target_tags   = var.target_tags
 }
 
-# resource "google_compute_instance" "vm-instance" {
-#   name         = var.name
-#   machine_type = var.machine_type
-#   zone         = var.zone
-
-#   tags = ["vm-instance"]
-
-#   boot_disk {
-#     device_name = "instance-1"
-#     initialize_params {
-#       image = var.image
-#       size  = var.size
-#       type  = var.type
-#     }
-#   }
-
-#   // Local SSD disk
-#   scratch_disk {
-#     interface = var.interface
-#   }
-
-#   network_interface {
-#     network = google_compute_network.vpc_network.self_link
-
-#     subnetwork = google_compute_subnetwork.webapp_subnet.self_link
-
-#     access_config {
-#       // Ephemeral public IP
-#     }
-#   }
-
-#   metadata_startup_script = <<-EOF
-#     echo "DATABASE_URL=jdbc:mysql://${google_sql_database_instance.mysql_instance.private_ip_address}:3306/${var.db_name}?createDatabaseIfNotExist=true" > .env
-#     echo "DATABASE_USERNAME=${var.webapp_subnet_name}" >> .env
-#     echo "DATABASE_PASSWORD=${random_password.password.result}" >> .env
-#     sudo mv .env /opt/
-#     sudo chown csye6225:csye6225 /opt/.env
-#     sudo setenforce 0
-#     sudo systemctl daemon-reload
-#     sudo systemctl restart csye6225.service
-#   EOF
-
-#   service_account {
-#     email  = var.email
-#     scopes = var.scopes
-#   }
-# }
-
 resource "google_compute_region_instance_template" "instance_template" {
   name_prefix  = "instance-template-"
   machine_type = var.machine_type
@@ -194,6 +185,10 @@ resource "google_compute_region_instance_template" "instance_template" {
     disk_type    = var.type
     disk_size_gb = var.size
     auto_delete  = true
+
+    disk_encryption_key {
+      kms_key_self_link = google_kms_crypto_key.key.id
+    }
   }
 
   network_interface {
@@ -221,7 +216,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     email  = var.email
     scopes = var.scopes
   }
-  tags         = var.target_tags
+  tags = var.target_tags
 }
 
 resource "google_compute_health_check" "http2-health-check" {
@@ -355,7 +350,9 @@ resource "google_project_iam_binding" "project" {
   for_each = toset([
     "roles/logging.admin",
     "roles/monitoring.metricWriter",
-    "roles/pubsub.publisher"
+    "roles/pubsub.publisher",
+    "roles/cloudsql.admin",
+    "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   ])
   role = each.key
 
@@ -382,6 +379,12 @@ resource "google_storage_bucket" "bucket" {
   name                        = "${random_id.bucket_prefix.hex}-gcf-source" # Every bucket name must be globally unique
   location                    = var.bucket_location
   uniform_bucket_level_access = true
+
+  encryption {
+    default_kms_key_name = google_kms_crypto_key.key.id
+  }
+
+  depends_on = [google_kms_crypto_key_iam_binding.crypto_key]
 }
 
 resource "google_storage_bucket_object" "default" {
