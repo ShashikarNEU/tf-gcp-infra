@@ -219,6 +219,74 @@ resource "google_compute_region_instance_template" "instance_template" {
   tags = var.target_tags
 }
 
+# Creating secret
+resource "google_secret_manager_secret" "db-name-secret" {
+  project   = var.project_id
+  secret_id = "db_name"
+
+  replication {
+    auto {}
+  }
+}
+
+# Creating secret version with service account key
+resource "google_secret_manager_secret_version" "db-name-version" {
+  secret = google_secret_manager_secret.db-name-secret.id
+
+  secret_data = var.db_name
+}
+
+# Creating secret
+resource "google_secret_manager_secret" "db-ip-secret" {
+  project   = var.project_id
+  secret_id = "db_ip"
+
+  replication {
+    auto {}
+  }
+}
+
+# Creating secret version with service account key
+resource "google_secret_manager_secret_version" "db-ip-version" {
+  secret = google_secret_manager_secret.db-ip-secret.id
+
+  secret_data = google_sql_database_instance.mysql_instance.private_ip_address
+}
+
+# Creating secret
+resource "google_secret_manager_secret" "db-username-secret" {
+  project   = var.project_id
+  secret_id = "db_username"
+
+  replication {
+    auto {}
+  }
+}
+
+# Creating secret version with service account key
+resource "google_secret_manager_secret_version" "db-username-version" {
+  secret = google_secret_manager_secret.db-username-secret.id
+
+  secret_data = var.webapp_subnet_name
+}
+
+# Creating secret
+resource "google_secret_manager_secret" "db-password-secret" {
+  project   = var.project_id
+  secret_id = "db_password"
+
+  replication {
+    auto {}
+  }
+}
+
+# Creating secret version with service account key
+resource "google_secret_manager_secret_version" "db-password-version" {
+  secret = google_secret_manager_secret.db-password-secret.id
+
+  secret_data = random_password.password.result
+}
+
 resource "google_compute_health_check" "http2-health-check" {
   name        = "http2-health-check"
   description = "Health check via http2"
