@@ -271,3 +271,11 @@ variable "timeout_sec_backend_service" {
 variable "email_ce_service_agent" {
   type = string
 }
+
+variable "purpose" {
+  type = string
+}
+
+variable "rotation_period" {
+  type = string
+}

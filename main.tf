@@ -53,16 +53,40 @@ resource "random_id" "db_name_suffix" {
 }
 
 resource "google_kms_key_ring" "keyring" {
-  name     = "keyring-name"
+  name     = "keyring-${random_id.db_name_suffix.hex}"
   location = var.region
 }
 
-resource "google_kms_crypto_key" "key" {
-  name     = "crypto-key-name"
+resource "google_kms_crypto_key" "key_vm" {
+  name     = "crypto-key-vm"
   key_ring = google_kms_key_ring.keyring.id
-  purpose  = "ENCRYPT_DECRYPT"
+  purpose  = var.purpose
 
-  rotation_period = "2592000s"
+  rotation_period = var.rotation_period
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_kms_crypto_key" "key_bucket" {
+  name     = "crypto-key-bucket"
+  key_ring = google_kms_key_ring.keyring.id
+  purpose  = var.purpose
+
+  rotation_period = var.rotation_period
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_kms_crypto_key" "key_sql" {
+  name     = "crypto-key-sql"
+  key_ring = google_kms_key_ring.keyring.id
+  purpose  = var.purpose
+
+  rotation_period = var.rotation_period
 
   lifecycle {
     prevent_destroy = false
@@ -78,14 +102,30 @@ resource "google_project_service_identity" "gcp_sa_cloud_sql" {
   project  = var.project_id
 }
 
-resource "google_kms_crypto_key_iam_binding" "crypto_key" {
-  crypto_key_id = google_kms_crypto_key.key.id
+resource "google_kms_crypto_key_iam_binding" "crypto_key_vm" {
+  crypto_key_id = google_kms_crypto_key.key_vm.id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
 
   members = [
-    "serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}",
-    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
     "serviceAccount:${var.email_ce_service_agent}"
+  ]
+}
+
+resource "google_kms_crypto_key_iam_binding" "crypto_key_bucket" {
+  crypto_key_id = google_kms_crypto_key.key_bucket.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+  members = [
+    "serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"
+  ]
+}
+
+resource "google_kms_crypto_key_iam_binding" "crypto_key_sql" {
+  crypto_key_id = google_kms_crypto_key.key_sql.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+  members = [
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
   ]
 }
 
@@ -94,8 +134,8 @@ resource "google_sql_database_instance" "mysql_instance" {
   database_version    = var.database_version
   region              = var.region
   deletion_protection = false
-  encryption_key_name = google_kms_crypto_key.key.id
-  depends_on          = [google_service_networking_connection.private_vpc_connection, google_kms_crypto_key_iam_binding.crypto_key]
+  encryption_key_name = google_kms_crypto_key.key_sql.id
+  depends_on          = [google_service_networking_connection.private_vpc_connection, google_kms_crypto_key_iam_binding.crypto_key_sql]
 
 
   settings {
@@ -129,7 +169,7 @@ resource "random_password" "password" {
   min_upper        = 2
   min_numeric      = 2
   min_special      = 2
-  override_special = "~!@#$%^&*()_-+={}[]/<>,.;?':|"
+  override_special = "~!@#$%^&*()_-+={}[]<>.;?:|"
 }
 
 resource "google_sql_user" "users" {
@@ -187,7 +227,7 @@ resource "google_compute_region_instance_template" "instance_template" {
     auto_delete  = true
 
     disk_encryption_key {
-      kms_key_self_link = google_kms_crypto_key.key.id
+      kms_key_self_link = google_kms_crypto_key.key_vm.id
     }
   }
 
@@ -216,7 +256,8 @@ resource "google_compute_region_instance_template" "instance_template" {
     email  = var.email
     scopes = var.scopes
   }
-  tags = var.target_tags
+  tags       = var.target_tags
+  depends_on = [google_kms_crypto_key_iam_binding.crypto_key_vm]
 }
 
 # Creating secret
@@ -285,6 +326,23 @@ resource "google_secret_manager_secret_version" "db-password-version" {
   secret = google_secret_manager_secret.db-password-secret.id
 
   secret_data = random_password.password.result
+}
+
+# Creating secret
+resource "google_secret_manager_secret" "vm-kms-encryption" {
+  project   = var.project_id
+  secret_id = "vm-kms-encryption"
+
+  replication {
+    auto {}
+  }
+}
+
+# Creating secret version with service account key
+resource "google_secret_manager_secret_version" "vm-kms-encryption-version" {
+  secret = google_secret_manager_secret.vm-kms-encryption.id
+
+  secret_data = "projects/cloud-course-csye6225-dev/locations/us-east1/keyRings/${google_kms_key_ring.keyring.name}/cryptoKeys/${google_kms_crypto_key.key_vm.name}"
 }
 
 resource "google_compute_health_check" "http2-health-check" {
@@ -449,10 +507,10 @@ resource "google_storage_bucket" "bucket" {
   uniform_bucket_level_access = true
 
   encryption {
-    default_kms_key_name = google_kms_crypto_key.key.id
+    default_kms_key_name = google_kms_crypto_key.key_bucket.id
   }
 
-  depends_on = [google_kms_crypto_key_iam_binding.crypto_key]
+  depends_on = [google_kms_crypto_key_iam_binding.crypto_key_bucket]
 }
 
 resource "google_storage_bucket_object" "default" {
