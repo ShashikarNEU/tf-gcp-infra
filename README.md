@@ -1,82 +1,136 @@
-# Setting up Infrastructure on Google Cloud Platform using Terraform
+# GCP Infrastructure with Terraform
 
-This repository contains Terraform configurations to set up networking resources such as Virtual Private Cloud (VPC), subnets, routes, etc., on Google Cloud Platform (GCP).
+Infrastructure-as-Code (IaC) project that provisions and manages cloud networking resources on **Google Cloud Platform (GCP)** using **Terraform**. Covers VPC creation, subnet configuration, routing, firewall rules, Cloud SQL, Cloud Storage, and more — built for a production-grade cloud-native web application.
 
-## Requirements
+---
 
-- [gcloud CLI](https://cloud.google.com/sdk/gcloud) installed and configured on your development machine.
-- [Terraform](https://www.terraform.io/downloads.html) installed on your machine.
-- Enable required GCP services/APIs in your project.
+## Tech Stack
+
+| Tool | Purpose |
+|------|---------|
+| Terraform | Infrastructure provisioning and state management |
+| Google Cloud Platform | Cloud provider |
+| gcloud CLI | Authentication and project configuration |
+| GitHub Actions | CI/CD for infrastructure changes |
+
+---
+
+## Infrastructure Components
+
+- **VPC (Virtual Private Cloud)** — Custom VPC with isolated network environment
+- **Subnets** — Separate `webapp` and `db` subnets for application and database tiers
+- **Routes** — Custom route to `0.0.0.0/0` via Internet Gateway for public traffic
+- **Firewall Rules** — Ingress/egress rules to control traffic between subnets and the internet
+- **Cloud SQL** — Managed MySQL instance for application database
+- **Cloud Storage** — Object storage buckets for static assets and backups
+- **VM Instances** — Compute Engine VMs running the application
+- **Auto Scaling** — Managed Instance Groups with autoscaling policies
+- **Load Balancer** — HTTP(S) Load Balancer for distributing traffic
+- **Customer-Managed Encryption Keys (CMEK)** — Encryption for Cloud SQL and Storage
+
+---
 
 ## Enabled GCP APIs
 
 - Compute Engine API
+- Cloud SQL Admin API
+- Cloud Storage API + JSON API
+- Cloud Logging & Monitoring API
+- Cloud DNS API
+- Service Management & Usage API
 - BigQuery API
-- BigQuery Migration API
-- BigQuery Storage API
-- Cloud Datastore API
-- Cloud Logging API
-- Cloud Monitoring API
-- Cloud OS Login API
-- Cloud SQL
-- Cloud Storage
-- Cloud Storage API
-- Cloud Trace API
-- Google Cloud APIs
-- Google Cloud Storage JSON API
-- Service Management API
-- Service Usage API
+- Cloud Key Management Service (KMS) API
+
+---
+
+## Prerequisites
+
+- [gcloud CLI](https://cloud.google.com/sdk/gcloud) installed and authenticated
+- [Terraform](https://www.terraform.io/downloads.html) v1.0+ installed
+- A GCP project with billing enabled
+- Required APIs enabled in your GCP project
+
+---
 
 ## Getting Started
 
-1. **Clone Repository**: Clone this repository to your local machine.
+### 1. Clone the Repository
 
-    ```bash
-    git clone https://github.com/your-username/tf-gcp-infra.git
-    ```
+```bash
+git clone https://github.com/ShashikarNEU/tf-gcp-infra.git
+cd tf-gcp-infra
+```
 
-2. **Navigate to Repository**: Enter the repository directory.
+### 2. Authenticate with GCP
 
-    ```bash
-    cd tf-gcp-infra
-    ```
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+gcloud auth application-default login
+```
 
-3. **Set up gcloud CLI**: Ensure that the gcloud CLI is installed and authenticated.
+### 3. Initialize Terraform
 
-    ```bash
-    gcloud auth login
-    ```
+```bash
+terraform init
+```
 
-4. **Set up Terraform**: Initialize Terraform configurations.
+### 4. Review the Plan
 
-    ```bash
-    terraform init
-    ```
+```bash
+terraform plan
+```
 
-## Infrastructure Setup
+### 5. Apply Infrastructure
 
-1. **Create VPC and Subnets**: Terraform will create a Virtual Private Cloud (VPC) with two subnets: `webapp` and `db`.
+```bash
+terraform apply
+```
 
-2. **Configure Route**: Terraform will add a route to `0.0.0.0/0` with the next hop to Internet Gateway and attach it to your VPC.
+### 6. Tear Down
 
-3. **No Hardcoded Values**: Ensure that no values are hardcoded in the Terraform configuration files.
+```bash
+terraform destroy
+```
 
-## Usage
+---
 
-1. **Plan Infrastructure**: View the execution plan to understand what Terraform will do.
+## Project Structure
 
-    ```bash
-    terraform plan
-    ```
+```
+tf-gcp-infra/
+├── main.tf              # Core infrastructure resources
+├── variables.tf         # Input variable definitions
+├── outputs.tf           # Output values
+├── terraform.tfvars     # Variable values (not committed)
+├── vpc.tf               # VPC and subnet configuration
+├── firewall.tf          # Firewall rules
+├── sql.tf               # Cloud SQL instance
+├── storage.tf           # Cloud Storage buckets
+├── compute.tf           # VM instances and instance templates
+└── README.md
+```
 
-2. **Apply Infrastructure Changes**: Apply the Terraform configurations to create the networking resources.
+---
 
-    ```bash
-    terraform apply
-    ```
+## Key Design Decisions
 
-3. **Destroy Infrastructure**: Tear down the created infrastructure when it's no longer needed.
+- **No hardcoded values** — All configuration is driven by variables via `terraform.tfvars`
+- **Separation of concerns** — Network, compute, database, and storage are in separate `.tf` files
+- **Security** — Private subnets for the database tier, CMEK for encryption at rest
+- **Scalability** — Managed instance groups with autoscaling for the application tier
 
-    ```bash
-    terraform destroy
-    ```
+---
+
+## CI/CD
+
+GitHub Actions workflows are configured to:
+- Validate and lint Terraform on pull requests
+- Apply infrastructure changes on merge to `main`
+
+---
+
+## Related Repositories
+
+- [webapp](https://github.com/ShashikarNEU/webapp) — The Spring Boot application deployed on this infrastructure
+- [serverless-fork](https://github.com/ShashikarNEU/serverless-fork) — Cloud Functions triggered by Pub/Sub events in this infrastructure
