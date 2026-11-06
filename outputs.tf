@@ -17,8 +17,3 @@ output "vm_kms_key" {
   description = "CMEK used for VM boot disks"
   value       = google_kms_crypto_key.key_vm.id
 }
-
-output "workload_identity_provider" {
-  description = "Set as the WIF_PROVIDER secret in GitHub"
-  value       = google_iam_workload_identity_pool_provider.github.name
-}

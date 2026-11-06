@@ -279,7 +279,7 @@ variable "purpose" {
 variable "rotation_period" {
   type = string
 }
-# ---- Added: hardening + CI ----
+# ---- Added: hardening ----
 
 variable "sql_availability_type" {
   description = "Cloud SQL availability: REGIONAL (HA standby in another zone) or ZONAL"
@@ -306,16 +306,4 @@ variable "alert_email" {
   description = "Email that receives monitoring alerts. Empty = alert policies with no notification channel."
   type        = string
   default     = ""
-}
-
-variable "github_owner" {
-  description = "GitHub user/org allowed to authenticate via Workload Identity Federation"
-  type        = string
-  default     = "ShashikarNEU"
-}
-
-variable "github_repositories" {
-  description = "Repos under github_owner whose Actions may impersonate the CI service account"
-  type        = list(string)
-  default     = ["webapp", "tf-gcp-infra"]
 }

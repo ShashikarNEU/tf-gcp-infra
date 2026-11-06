@@ -36,7 +36,6 @@ User ──> Cloud DNS (A record) ──> Global HTTPS LB (Google-managed cert)
 | Pub/Sub + Cloud Function | SNS/SQS + Lambda |
 | Cloud NAT | NAT Gateway |
 | Secret Manager / Cloud KMS | Secrets Manager / KMS |
-| Workload Identity Federation | IAM OIDC provider for GitHub Actions |
 
 ---
 
@@ -58,8 +57,7 @@ User ──> Cloud DNS (A record) ──> Global HTTPS LB (Google-managed cert)
 | `functions.tf` | Source bucket (CMEK) and the Cloud Function with secrets mounted from Secret Manager |
 | `iam.tf` | Project roles for the app and CI service accounts (non-authoritative `iam_member`) |
 | `monitoring.tf` | Alert policies: LB 5xx rate, p99 latency, fleet CPU, function errors |
-| `wif.tf` | Workload Identity Federation pool/provider for GitHub Actions |
-| `outputs.tf` | LB IP, DB private IP, MIG name, VM KMS key, WIF provider |
+| `outputs.tf` | LB IP, DB private IP, MIG name, VM KMS key |
 | `moved.tf` | `moved` / `removed` blocks so existing state survives the refactor |
 | `variables.tf` | Inputs (values go in an untracked `*.tfvars`) |
 
@@ -72,14 +70,13 @@ User ──> Cloud DNS (A record) ──> Global HTTPS LB (Google-managed cert)
 - **Secrets never sit in metadata or Git.** VMs fetch DB settings from Secret Manager at boot with their service account. The function gets the DB password and Mailgun key as Secret Manager-backed env vars. The Mailgun key is added outside Terraform so it never lands in state.
 - **CMEK everywhere data rests.** Separate rotating keys for VM disks, the bucket and Cloud SQL, each usable only by its own Google service agent.
 - **Immutable deploys.** Terraform creates the initial template and MIG. After that, the webapp CI bakes a new image, creates a new template and rolls the MIG. `ignore_changes = [version]` stops Terraform from rolling it back.
-- **Keyless CI.** GitHub Actions authenticates with Workload Identity Federation (short-lived tokens) instead of a stored service-account key.
 
 ---
 
 ## Prerequisites
 
 - Terraform **>= 1.7** (uses `removed` blocks) and the gcloud CLI
-- A GCP project with billing and these APIs enabled: Compute, Cloud SQL Admin, Service Networking, Cloud KMS, Secret Manager, Cloud DNS, Cloud Storage, Pub/Sub, Cloud Functions, Cloud Run, Cloud Build, Artifact Registry, Eventarc, Serverless VPC Access, Cloud Logging, Cloud Monitoring, IAM, IAM Service Account Credentials, Security Token Service
+- A GCP project with billing and these APIs enabled: Compute, Cloud SQL Admin, Service Networking, Cloud KMS, Secret Manager, Cloud DNS, Cloud Storage, Pub/Sub, Cloud Functions, Cloud Run, Cloud Build, Artifact Registry, Eventarc, Serverless VPC Access, Cloud Logging, Cloud Monitoring, IAM
 - An existing Cloud DNS managed zone for your domain
 - A GCS bucket for Terraform state
 - The VM service account (`email`) with scopes including `https://www.googleapis.com/auth/cloud-platform`, so it can read Secret Manager
@@ -102,7 +99,7 @@ terraform apply -var-file=dev.tfvars
 printf '%s' "<mailgun-key>" | gcloud secrets versions add mailgun-api-key --data-file=-
 ```
 
-New inputs to set in your `*.tfvars`: `mailgun_domain`, `verify_base_url` (e.g. `https://your-domain/v1/user/verify`), optionally `alert_email`, `sql_availability_type`, `github_owner`, `github_repositories`.
+New inputs to set in your `*.tfvars`: `mailgun_domain`, `verify_base_url` (e.g. `https://your-domain/v1/user/verify`), optionally `alert_email`, `sql_availability_type`.
 
 **Migrating from the old single-file version:** the old state was local. Run `terraform init -migrate-state` with the backend config above to copy it into GCS. `moved.tf` maps the old secret resources to their new addresses and drops the old authoritative IAM binding from state without deleting any grants. Review `terraform plan` before applying: the firewall rules and instance template are intentionally replaced.
 
@@ -111,13 +108,6 @@ New inputs to set in your `*.tfvars`: `mailgun_domain`, `verify_base_url` (e.g. 
 ## CI (GitHub Actions)
 
 On every pull request to `main`: `terraform fmt -check`, `terraform init -backend=false`, `terraform validate`.
-
-After applying, set these GitHub secrets on the webapp repo so its workflows authenticate keylessly:
-
-| Secret | Value |
-|--------|-------|
-| `WIF_PROVIDER` | `terraform output -raw workload_identity_provider` |
-| `WIF_SERVICE_ACCOUNT` | the CI service account email (`email_workflow`) |
 
 ---
 
