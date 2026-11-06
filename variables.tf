@@ -279,3 +279,43 @@ variable "purpose" {
 variable "rotation_period" {
   type = string
 }
+# ---- Added: hardening + CI ----
+
+variable "sql_availability_type" {
+  description = "Cloud SQL availability: REGIONAL (HA standby in another zone) or ZONAL"
+  type        = string
+  default     = "REGIONAL"
+
+  validation {
+    condition     = contains(["REGIONAL", "ZONAL"], var.sql_availability_type)
+    error_message = "sql_availability_type must be REGIONAL or ZONAL."
+  }
+}
+
+variable "mailgun_domain" {
+  description = "Mailgun sending domain used by the verify-email function"
+  type        = string
+}
+
+variable "verify_base_url" {
+  description = "Public verification endpoint, e.g. https://example.com/v1/user/verify"
+  type        = string
+}
+
+variable "alert_email" {
+  description = "Email that receives monitoring alerts. Empty = alert policies with no notification channel."
+  type        = string
+  default     = ""
+}
+
+variable "github_owner" {
+  description = "GitHub user/org allowed to authenticate via Workload Identity Federation"
+  type        = string
+  default     = "ShashikarNEU"
+}
+
+variable "github_repositories" {
+  description = "Repos under github_owner whose Actions may impersonate the CI service account"
+  type        = list(string)
+  default     = ["webapp", "tf-gcp-infra"]
+}
